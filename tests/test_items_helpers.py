@@ -642,6 +642,29 @@ def test_tool_call_item_to_input_item_strips_created_by() -> None:
     assert getattr(call, "created_by", None) == "server"
 
 
+def test_tool_call_item_to_input_item_serializes_wire_aliases() -> None:
+    """RunItem replay must serialize wire aliases, e.g. async_ as async, to match the input-item schema."""
+    agent = Agent(name="A")
+    call = ResponseFunctionToolCall.model_validate(
+        {
+            "id": "fc_1",
+            "arguments": "{}",
+            "call_id": "call_1",
+            "name": "lookup",
+            "type": "function_call",
+            "created_by": "server",
+            "async": False,
+        }
+    )
+    item = ToolCallItem(agent=agent, raw_item=call)
+    replayed = item.to_input_item()
+    assert isinstance(replayed, dict)
+    assert replayed["type"] == "function_call"
+    assert replayed["async"] is False
+    assert "async_" not in replayed
+    assert "created_by" not in replayed
+
+
 def test_tool_call_output_item_to_input_item_strips_created_by() -> None:
     agent = Agent(name="A")
     item = ToolCallOutputItem(
