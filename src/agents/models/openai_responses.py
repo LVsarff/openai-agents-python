@@ -1858,16 +1858,16 @@ class Converter:
                 response_create_params.ToolChoice,
                 {"type": "programmatic_tool_calling"},
             )
-        elif tool_choice == "file_search":
+        elif tool_choice == "file_search" and cls._has_file_search_tool(tools):
             return {
                 "type": "file_search",
             }
-        elif tool_choice == "web_search":
+        elif tool_choice == "web_search" and cls._has_web_search_tool(tools):
             return {
                 # TODO: revisit the type: ignore comment when ToolChoice is updated in the future
                 "type": "web_search",  # type: ignore[misc, return-value]
             }
-        elif tool_choice == "web_search_preview":
+        elif tool_choice == "web_search_preview" and cls._has_web_search_tool(tools):
             return {
                 "type": "web_search_preview",
             }
@@ -1884,11 +1884,11 @@ class Converter:
             return {
                 "type": "computer_use_preview",
             }
-        elif tool_choice == "image_generation":
+        elif tool_choice == "image_generation" and cls._has_image_generation_tool(tools):
             return {
                 "type": "image_generation",
             }
-        elif tool_choice == "code_interpreter":
+        elif tool_choice == "code_interpreter" and cls._has_code_interpreter_tool(tools):
             return {
                 "type": "code_interpreter",
             }
@@ -2019,6 +2019,22 @@ class Converter:
     @classmethod
     def _has_apply_patch_tool(cls, tools: Sequence[Tool] | None) -> bool:
         return any(isinstance(tool, ApplyPatchTool) for tool in tools or ())
+
+    @classmethod
+    def _has_file_search_tool(cls, tools: Sequence[Tool] | None) -> bool:
+        return any(isinstance(tool, FileSearchTool) for tool in tools or ())
+
+    @classmethod
+    def _has_web_search_tool(cls, tools: Sequence[Tool] | None) -> bool:
+        return any(isinstance(tool, WebSearchTool) for tool in tools or ())
+
+    @classmethod
+    def _has_image_generation_tool(cls, tools: Sequence[Tool] | None) -> bool:
+        return any(isinstance(tool, ImageGenerationTool) for tool in tools or ())
+
+    @classmethod
+    def _has_code_interpreter_tool(cls, tools: Sequence[Tool] | None) -> bool:
+        return any(isinstance(tool, CodeInterpreterTool) for tool in tools or ())
 
     @classmethod
     def _has_computer_tool(cls, tools: Sequence[Tool] | None) -> bool:

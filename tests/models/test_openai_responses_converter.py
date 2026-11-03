@@ -40,6 +40,8 @@ from agents import (
     FileSearchTool,
     Handoff,
     HostedMCPTool,
+    CodeInterpreterTool,
+    ImageGenerationTool,
     ShellTool,
     Tool,
     ToolSearchTool,
@@ -101,9 +103,15 @@ def test_convert_tool_choice_standard_values():
     assert Converter.convert_tool_choice("auto") == "auto"
     assert Converter.convert_tool_choice("required") == "required"
     assert Converter.convert_tool_choice("none") == "none"
-    # Special tool types are represented as dicts of type only.
-    assert Converter.convert_tool_choice("file_search") == {"type": "file_search"}
-    assert Converter.convert_tool_choice("web_search_preview") == {"type": "web_search_preview"}
+    # Special tool types are represented as dicts of type only. Hosted tool
+    # names only stay hosted when the corresponding hosted tool is defined;
+    # otherwise they fall back to named-function selection (issue #5472).
+    assert Converter.convert_tool_choice(
+        "file_search", tools=[FileSearchTool(vector_store_ids=["vs_123"])]
+    ) == {"type": "file_search"}
+    assert Converter.convert_tool_choice(
+        "web_search_preview", tools=[WebSearchTool()]
+    ) == {"type": "web_search_preview"}
     # Arbitrary string should be interpreted as a function name.
     assert Converter.convert_tool_choice("my_function") == {
         "type": "function",
@@ -178,6 +186,64 @@ def test_convert_tool_choice_builtin_shell_and_apply_patch() -> None:
     assert Converter.convert_tool_choice("apply_patch", tools=[apply_patch_tool]) == {
         "type": "apply_patch"
     }
+
+
+def test_convert_tool_choice_allows_function_named_hosted_tools_without_hosted_definition() -> None:
+    """A function tool named like a hosted tool must be selectable by name (issue #5472)."""
+    web_search_function = function_tool(lambda city: city, name_override="web_search")
+    file_search_function = function_tool(lambda query: query, name_override="file_search")
+    image_generation_function = function_tool(
+        lambda prompt: prompt, name_override="image_generation"
+    )
+    code_interpreter_function = function_tool(
+        lambda code: code, name_override="code_interpreter"
+    )
+
+    assert Converter.convert_tool_choice("web_search", tools=[web_search_function]) == {
+        "type": "function",
+        "name": "web_search",
+    }
+    assert Converter.convert_tool_choice("web_search_preview", tools=[web_search_function]) == {
+        "type": "function",
+        "name": "web_search_preview",
+    }
+    assert Converter.convert_tool_choice("file_search", tools=[file_search_function]) == {
+        "type": "function",
+        "name": "file_search",
+    }
+    assert Converter.convert_tool_choice(
+        "image_generation", tools=[image_generation_function]
+    ) == {
+        "type": "function",
+        "name": "image_generation",
+    }
+    assert Converter.convert_tool_choice(
+        "code_interpreter", tools=[code_interpreter_function]
+    ) == {
+        "type": "function",
+        "name": "code_interpreter",
+    }
+
+
+def test_convert_tool_choice_builtin_hosted_tools_follow_definitions() -> None:
+    """Hosted tool names stay hosted when the corresponding tool is defined."""
+    assert Converter.convert_tool_choice("web_search", tools=[WebSearchTool()]) == {
+        "type": "web_search",
+    }
+    assert Converter.convert_tool_choice("web_search_preview", tools=[WebSearchTool()]) == {
+        "type": "web_search_preview",
+    }
+    assert Converter.convert_tool_choice(
+        "file_search", tools=[FileSearchTool(vector_store_ids=["vs_123"])]
+    ) == {"type": "file_search"}
+    assert Converter.convert_tool_choice(
+        "image_generation",
+        tools=[ImageGenerationTool(tool_config={"type": "image_generation"})],
+    ) == {"type": "image_generation"}
+    assert Converter.convert_tool_choice(
+        "code_interpreter",
+        tools=[CodeInterpreterTool(tool_config={"container": {"type": "auto"}})],
+    ) == {"type": "code_interpreter"}
 
 
 def test_convert_tool_choice_allows_function_named_tool_search() -> None:
