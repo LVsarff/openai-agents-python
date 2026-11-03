@@ -930,6 +930,9 @@ class AnyLLMModel(Model):
                 }
             elif http_options is None:
                 extra_kwargs["http_options"] = {"headers": headers}
+        elif self._provider_name == "mistral":
+            # mistralai's Chat.complete_async / stream_async accept http_headers, not extra_headers
+            extra_kwargs["http_headers"] = headers
         else:
             extra_kwargs["extra_headers"] = headers
 
