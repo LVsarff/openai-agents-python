@@ -956,6 +956,47 @@ async def test_parallel_guardrail_trip_before_tool_execution_stops_streaming_tur
 
 
 @pytest.mark.asyncio
+async def test_parallel_guardrail_trip_before_model_request_skips_streamed_model_call():
+    guardrail_tripped = asyncio.Event()
+    instructions_ready = asyncio.Event()
+
+    @input_guardrail(run_in_parallel=True)
+    async def trip_before_model_request(
+        ctx: RunContextWrapper[Any], agent: Agent[Any], input: str | list[TResponseInputItem]
+    ) -> GuardrailFunctionOutput:
+        await asyncio.sleep(SHORT_DELAY)
+        guardrail_tripped.set()
+        return GuardrailFunctionOutput(
+            output_info="parallel_trip_before_model_request",
+            tripwire_triggered=True,
+        )
+
+    async def slow_instructions(ctx: RunContextWrapper[Any], agent: Agent[Any]) -> str:
+        await asyncio.wait_for(guardrail_tripped.wait(), timeout=1)
+        instructions_ready.set()
+        return "Be helpful."
+
+    model = ScriptedModel()
+    model.enqueue([get_text_message("expensive answer")])
+
+    agent = Agent(
+        name="streaming_guardrail_early_model_check_agent",
+        instructions=slow_instructions,
+        input_guardrails=[trip_before_model_request],
+        model=model,
+    )
+
+    result = Runner.run_streamed(agent, "trigger guardrail")
+
+    with pytest.raises(InputGuardrailTripwireTriggered):
+        async for _event in result.stream_events():
+            pass
+
+    assert instructions_ready.is_set() is True
+    assert not model.calls, "No model request should be sent once the tripwire is known"
+
+
+@pytest.mark.asyncio
 async def test_parallel_guardrail_trip_with_slow_cancel_sibling_stops_streaming_turn():
     tool_was_executed = False
     model_started = asyncio.Event()

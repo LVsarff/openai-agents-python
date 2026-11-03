@@ -2617,6 +2617,10 @@ async def run_single_turn_streamed(
 
     stream_failed_retry_attempts: list[int] = [0]
 
+    # A parallel input guardrail can trip while this turn is being prepared. Don't send a
+    # model request once that verdict is known; the non-streamed runner cancels it instead.
+    await raise_if_input_guardrail_tripwire_known()
+
     compaction_input_digests = prepare_compaction_model_input(
         session, context_wrapper, filtered.input
     )
